@@ -49,31 +49,31 @@ jobs:
 
       - name: Deploy container on server
         env:
-          HOST: ${{ secrets.SSH_HOST }}
-          USER: ${{ secrets.SSH_USER }}
-          VERSION: ${{ env.VERSION }}
+          HOST:        ${{ secrets.SSH_HOST }}
+          USER:        ${{ secrets.SSH_USER }}
+          VERSION:     ${{ env.VERSION }}          
           REGISTRY_ID: ${{ secrets.YC_REGISTRY_ID }}
+          YC_CR_TOKEN: ${{ secrets.YC_CR_TOKEN }}
         run: |
-          ssh -i ~/.ssh/id_rsa \
-              -o StrictHostKeyChecking=no \
-              ${USER}@${HOST} \
-              "REGISTRY_ID=$REGISTRY_ID VERSION=$VERSION bash -s" <<'EOF'
+          ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no \
+              "$USER@$HOST" \
+              "bash -s" <<'EOF'
             set -e
 
             REGISTRY="cr.yandex/${REGISTRY_ID}"
             IMAGE="${REGISTRY}/app:${VERSION}_latest"
 
-            echo "Pulling image: $IMAGE"
+            echo "Docker login…"
+            echo "$YC_CR_TOKEN" | docker login cr.yandex -u oauth --password-stdin
+
+            echo "Pulling $IMAGE"
             docker pull "$IMAGE"
 
-            echo "Stopping old container (if any)…"
+            echo "Restarting container…"
             docker stop app 2>/dev/null || true
             docker rm   app 2>/dev/null || true
-
-            echo "Starting new container…"
             docker run -d --name app -p 3000:3000 "$IMAGE"
-            EOF
-
+          EOF
 
       - name: Checkout (нужен gh)
         uses: actions/checkout@v4
