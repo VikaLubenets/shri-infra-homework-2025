@@ -55,16 +55,14 @@ jobs:
           username: oauth
           password: ${{ secrets.YC_CR_TOKEN }}
 
-      - name: Build and tag Docker image
-        run: |
-          IMAGE_FIX="$REGISTRY/$IMAGE_NAME:${RELEASE}_fix${FIX_ID}"
-          IMAGE_LATEST="$REGISTRY/$IMAGE_NAME:${RELEASE}_latest"
-
-          docker build -t "$IMAGE_FIX" .
-          docker tag "$IMAGE_FIX" "$IMAGE_LATEST"
-
-          docker push "$IMAGE_FIX"
-          docker push "$IMAGE_LATEST"
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: . 
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.RELEASE }}_fix${{ env.FIX_ID }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.RELEASE }}_latest
 
       - name: Git tag for fix
         run: |
