@@ -51,7 +51,7 @@ jobs:
         env:
           HOST:        ${{ secrets.SSH_HOST }}
           USER:        ${{ secrets.SSH_USER }}
-          VERSION:     ${{ env.VERSION }}          # 1, 2, 3 …
+          VERSION:     ${{ env.VERSION }}          
           REGISTRY_ID: ${{ secrets.YC_REGISTRY_ID }}
           YC_CR_TOKEN: ${{ secrets.YC_CR_TOKEN }}
         run: |
