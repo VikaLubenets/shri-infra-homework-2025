@@ -4,19 +4,18 @@ on:
   workflow_dispatch:
     inputs:
       release_version:
-        description: "Версия релиза (пример: 1)"
+        description: "Версия релиза (например: 2)"
         required: true
         type: string
 
 env:
   REGISTRY: cr.yandex/${{ secrets.YC_REGISTRY_ID }}
   IMAGE_NAME: app
-  RELEASE:  ${{ inputs.release_version }}
-  FIX_ID:   ${{ github.run_number }}
+  RELEASE: ${{ inputs.release_version }}
+  FIX_ID: ${{ github.run_number }}
 
 jobs:
   lint:
-    name: Run Linter
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -27,7 +26,6 @@ jobs:
       - run: npm run lint
 
   test:
-    name: Run Tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -48,6 +46,9 @@ jobs:
           ref: releases/${{ env.RELEASE }}
           fetch-depth: 0
 
+      - name: Pull latest commits
+        run: git pull origin releases/${{ env.RELEASE }}
+
       - name: Login to Yandex CR
         uses: docker/login-action@v2
         with:
@@ -58,7 +59,7 @@ jobs:
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
-          context: . 
+          context: .
           push: true
           tags: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.RELEASE }}_fix${{ env.FIX_ID }}
@@ -66,7 +67,7 @@ jobs:
 
       - name: Git tag for fix
         run: |
-          git config user.name  github-actions
+          git config user.name github-actions
           git config user.email github-actions@github.com
           git tag ${RELEASE}_fix${FIX_ID}
           git push origin ${RELEASE}_fix${FIX_ID}
@@ -106,13 +107,13 @@ jobs:
           issue-number: ${{ steps.find_issue.outputs.number }}
           body: |
             **Fix ${{ env.RELEASE }} #${{ env.FIX_ID }}**  
-            Date: ${{ steps.now.outputs.ts }}  
-            Author: @${{ github.actor }}
+            **Date:** ${{ steps.now.outputs.ts }}  
+            **Author:** @${{ github.actor }}
 
-            **Image:**  
-            `${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.RELEASE }}_fix${{ env.FIX_ID }}`
+            **Docker image:**  
+            [`cr.yandex/${{ secrets.YC_REGISTRY_ID }}/app:${{ env.RELEASE }}_fix${{ env.FIX_ID }}`](https://console.cloud.yandex.ru/container-registry/registry/${{ secrets.YC_REGISTRY_ID }})
 
-            **Changes since `${{ steps.prev.outputs.tag || 'initial' }}`**
+            **Changes since \`${{ steps.prev.outputs.tag || 'initial' }}\`:**
             ```
             ${{ steps.log.outputs.log }}
             ```
