@@ -11,8 +11,7 @@ on:
 env:
   REGISTRY: cr.yandex/${{ secrets.YC_REGISTRY_ID }}
   IMAGE_NAME: app
-  RELEASE: ${{ inputs.release_version }}
-  FIX_ID: ${{ github.run_number }}
+  RELEASE:   ${{ inputs.release_version }}
 
 jobs:
   lint:
@@ -20,8 +19,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
-        with:
-          node-version: '22.x'
+        with: { node-version: '22.x' }
       - run: npm ci
       - run: npm run lint
 
@@ -30,8 +28,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
-        with:
-          node-version: '22.x'
+        with: { node-version: '22.x' }
       - run: npm ci
       - run: npm run test
 
@@ -49,6 +46,19 @@ jobs:
       - name: Pull latest commits
         run: git pull origin releases/${{ env.RELEASE }}
 
+      - name: Calculate next fix number
+        id: seq
+        run: |
+          LAST=$(git tag --sort=-creatordate \
+                 | grep -E "^${RELEASE}_fix[0-9]+$" \
+                 | head -n1 | sed -E "s/^${RELEASE}_fix//")
+          if [ -z "$LAST" ]; then
+            NEXT=1
+          else
+            NEXT=$((LAST + 1))
+          fi
+          echo "id=$NEXT" >> "$GITHUB_OUTPUT"
+
       - name: Login to Yandex CR
         uses: docker/login-action@v2
         with:
@@ -62,15 +72,16 @@ jobs:
           context: .
           push: true
           tags: |
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.RELEASE }}_fix${{ env.FIX_ID }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.RELEASE }}_fix${{ steps.seq.outputs.id }}
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.RELEASE }}_latest
 
       - name: Git tag for fix
         run: |
-          git config user.name github-actions
+          TAG=${RELEASE}_fix${{ steps.seq.outputs.id }}
+          git config user.name  github-actions
           git config user.email github-actions@github.com
-          git tag ${RELEASE}_fix${FIX_ID}
-          git push origin ${RELEASE}_fix${FIX_ID}
+          git tag "$TAG"
+          git push origin "$TAG"
 
       - name: Find release Issue number
         id: find_issue
@@ -78,13 +89,17 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           NUM=$(gh issue list --state open --search "Release ${RELEASE}" --json number -q '.[0].number')
-          echo "number=$NUM" >> $GITHUB_OUTPUT
+          echo "number=$NUM" >> "$GITHUB_OUTPUT"
 
       - name: Get previous tag
         id: prev
         run: |
-          PREV=$(git tag --sort=-creatordate | grep -E "^${RELEASE}(_fix[0-9]+)?$" | sed -n 2p)
-          echo "tag=$PREV" >> $GITHUB_OUTPUT
+          CUR=${RELEASE}_fix${{ steps.seq.outputs.id }}
+          PREV=$(git tag --sort=-creatordate \
+                 | grep -E "^${RELEASE}(_fix[0-9]+)?$" \
+                 | grep -v "^${CUR}$" \
+                 | head -n1)
+          echo "tag=$PREV" >> "$GITHUB_OUTPUT"
 
       - name: Build changelog chunk
         id: log
@@ -95,23 +110,23 @@ jobs:
             RANGE_LOG=$(git log ${{ steps.prev.outputs.tag }}..HEAD --oneline)
           fi
           echo "$RANGE_LOG" > changes.txt
-          printf "log<<EOF\n%s\nEOF" "$RANGE_LOG" >> $GITHUB_OUTPUT
+          printf "log<<EOF\n%s\nEOF" "$RANGE_LOG" >> "$GITHUB_OUTPUT"
 
       - name: Current datetime
         id: now
-        run: echo "ts=$(date '+%Y-%m-%d %H:%M:%S')" >> $GITHUB_OUTPUT
+        run: echo "ts=$(date '+%Y-%m-%d %H:%M:%S')" >> "$GITHUB_OUTPUT"
 
       - name: Add comment to release Issue
         uses: peter-evans/create-or-update-comment@v3
         with:
           issue-number: ${{ steps.find_issue.outputs.number }}
           body: |
-            **Fix ${{ env.RELEASE }} #${{ env.FIX_ID }}**  
+            **Fix ${{ env.RELEASE }} #${{ steps.seq.outputs.id }}**  
             **Date:** ${{ steps.now.outputs.ts }}  
             **Author:** @${{ github.actor }}
 
             **Docker image:**  
-            [`cr.yandex/${{ secrets.YC_REGISTRY_ID }}/app:${{ env.RELEASE }}_fix${{ env.FIX_ID }}`](https://console.cloud.yandex.ru/container-registry/registry/${{ secrets.YC_REGISTRY_ID }})
+            [`cr.yandex/${{ secrets.YC_REGISTRY_ID }}/app:${{ env.RELEASE }}_fix${{ steps.seq.outputs.id }}`](https://console.cloud.yandex.ru/container-registry/registry/${{ secrets.YC_REGISTRY_ID }})
 
             **Changes since \`${{ steps.prev.outputs.tag || 'initial' }}\`:**
             ```
