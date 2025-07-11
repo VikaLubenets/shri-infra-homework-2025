@@ -51,29 +51,32 @@ jobs:
         env:
           HOST:        ${{ secrets.SSH_HOST }}
           USER:        ${{ secrets.SSH_USER }}
-          VERSION:     ${{ env.VERSION }}          
+          VERSION:     ${{ env.VERSION }}
           REGISTRY_ID: ${{ secrets.YC_REGISTRY_ID }}
           YC_CR_TOKEN: ${{ secrets.YC_CR_TOKEN }}
         run: |
           ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no \
               "$USER@$HOST" \
-              "bash -s" <<'EOF'
-            set -e
+              "REGISTRY_ID=${{ secrets.YC_REGISTRY_ID }} \
+               VERSION=${{ env.VERSION }} \
+               YC_CR_TOKEN=${{ secrets.YC_CR_TOKEN }} bash -s" <<'EOF'
+          set -e
 
-            REGISTRY="cr.yandex/${REGISTRY_ID}"
-            IMAGE="${REGISTRY}/app:${VERSION}_latest"
+          REGISTRY="cr.yandex/${REGISTRY_ID}"
+          IMAGE="${REGISTRY}/app:${VERSION}_latest"
 
-            echo "Docker login…"
-            echo "$YC_CR_TOKEN" | docker login cr.yandex -u oauth --password-stdin
+          echo "Docker login…"
+          echo "$YC_CR_TOKEN" | docker login cr.yandex -u oauth --password-stdin
 
-            echo "Pulling $IMAGE"
-            docker pull "$IMAGE"
+          echo "Pulling $IMAGE"
+          docker pull "$IMAGE"
 
-            echo "Restarting container…"
-            docker stop app 2>/dev/null || true
-            docker rm   app 2>/dev/null || true
-            docker run -d --name app -p 3000:3000 "$IMAGE"
+          echo "Restarting container…"
+          docker stop app 2>/dev/null || true
+          docker rm   app 2>/dev/null || true
+          docker run -d --name app -p 3000:3000 "$IMAGE"
           EOF
+
 
       - name: Checkout (нужен gh)
         uses: actions/checkout@v4
