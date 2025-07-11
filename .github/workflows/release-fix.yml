@@ -96,13 +96,17 @@ jobs:
           echo "$RANGE_LOG" > changes.txt
           printf "log<<EOF\n%s\nEOF" "$RANGE_LOG" >> $GITHUB_OUTPUT
 
+      - name: Current datetime
+        id: now
+        run: echo "ts=$(date '+%Y-%m-%d %H:%M:%S')" >> $GITHUB_OUTPUT
+
       - name: Add comment to release Issue
         uses: peter-evans/create-or-update-comment@v3
         with:
           issue-number: ${{ steps.find_issue.outputs.number }}
           body: |
             **Fix ${{ env.RELEASE }} #${{ env.FIX_ID }}**  
-            Date: $(date '+%Y-%m-%d %H:%M:%S')  
+            Date: ${{ steps.now.outputs.ts }}  
             Author: @${{ github.actor }}
 
             **Image:**  
