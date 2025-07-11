@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       release_version:
-        description: "Версия релиза (пример: 42)"
+        description: "Версия релиза (пример: 1)"
         required: true
         type: string
 
