@@ -4,14 +4,14 @@ on:
   workflow_dispatch:
     inputs:
       release_version:
-        description: "Версия релиза (например: 4)"
+        description: "Версия релиза (например 4)"
         required: true
         type: string
 
 env:
   REGISTRY: cr.yandex/${{ secrets.YC_REGISTRY_ID }}
   IMAGE_NAME: app
-  RELEASE:   ${{ inputs.release_version }}
+  RELEASE: ${{ inputs.release_version }}
 
 jobs:
   lint:
@@ -43,6 +43,9 @@ jobs:
           ref: releases/${{ env.RELEASE }}
           fetch-depth: 0
 
+      - name: Fetch all tags
+        run: git fetch --tags --force
+
       - name: Pull latest commits
         run: git pull origin releases/${{ env.RELEASE }}
 
@@ -52,12 +55,29 @@ jobs:
           LAST=$(git tag --sort=-creatordate \
                  | grep -E "^${RELEASE}_fix[0-9]+$" \
                  | head -n1 | sed -E "s/^${RELEASE}_fix//")
-          if [ -z "$LAST" ]; then
-            NEXT=1
-          else
-            NEXT=$((LAST + 1))
-          fi
+          NEXT=$(( ${LAST:-0} + 1 ))
           echo "id=$NEXT" >> "$GITHUB_OUTPUT"
+
+      - name: Get previous tag
+        id: prev
+        run: |
+          CUR=${RELEASE}_fix${{ steps.seq.outputs.id }}
+          PREV=$(git tag --sort=-creatordate \
+                 | grep -E "^${RELEASE}(_fix[0-9]+)?$" \
+                 | grep -v "^${CUR}$" \
+                 | head -n1)
+          echo "tag=$PREV" >> "$GITHUB_OUTPUT"
+
+      - name: Build changelog chunk
+        id: log
+        run: |
+          if [ -z "${{ steps.prev.outputs.tag }}" ]; then
+            RANGE_LOG=$(git log --oneline)
+          else
+            RANGE_LOG=$(git log ${{ steps.prev.outputs.tag }}..HEAD --oneline)
+          fi
+          echo "$RANGE_LOG" > changes.txt
+          printf "log<<EOF\n%s\nEOF" "$RANGE_LOG" >> "$GITHUB_OUTPUT"
 
       - name: Login to Yandex CR
         uses: docker/login-action@v2
@@ -88,29 +108,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          NUM=$(gh issue list --state open --search "Release ${RELEASE}" --json number -q '.[0].number')
+          NUM=$(gh issue list --state open --search "Release ${RELEASE}" \
+                 --json number -q '.[0].number')
           echo "number=$NUM" >> "$GITHUB_OUTPUT"
-
-      - name: Get previous tag
-        id: prev
-        run: |
-          CUR=${RELEASE}_fix${{ steps.seq.outputs.id }}
-          PREV=$(git tag --sort=-creatordate \
-                 | grep -E "^${RELEASE}(_fix[0-9]+)?$" \
-                 | grep -v "^${CUR}$" \
-                 | head -n1)
-          echo "tag=$PREV" >> "$GITHUB_OUTPUT"
-
-      - name: Build changelog chunk
-        id: log
-        run: |
-          if [ -z "${{ steps.prev.outputs.tag }}" ]; then
-            RANGE_LOG=$(git log --oneline)
-          else
-            RANGE_LOG=$(git log ${{ steps.prev.outputs.tag }}..HEAD --oneline)
-          fi
-          echo "$RANGE_LOG" > changes.txt
-          printf "log<<EOF\n%s\nEOF" "$RANGE_LOG" >> "$GITHUB_OUTPUT"
 
       - name: Current datetime
         id: now
